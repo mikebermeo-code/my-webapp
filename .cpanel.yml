@@ -1,0 +1,6 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home3/shopber1/public_html/mistraloffshore/clv-tool/
+    - /bin/cp index.html $DEPLOYPATH
+    - /bin/cp vessels.json $DEPLOYPATH
