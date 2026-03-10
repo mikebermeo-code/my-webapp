@@ -1,0 +1,9 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "last_updated": "2026-03-10",
+    "description": "Mistral Offshore — CLV Fleet Database",
+    "source": "VesselFinder / MarineTraffic / official vessel brochures"
+  },
+  "vessels": []
+}
