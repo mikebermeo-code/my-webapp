@@ -325,8 +325,8 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--bdr);display:
     <div class="ph"><div class="pdot"></div><div class="pt">Fleet Database &amp; Day Rates — 27 Vessels</div></div>
     <div class="pb" style="padding:0">
       <!-- Loading indicator -->
-      <div id="loadingMsg" style="padding:14px 17px;font-size:11px;font-weight:600;color:var(--mgl)">&#8635; Loading vessel database from GitHub...</div>
-      <div style="padding:4px 17px 12px;font-size:11px;font-weight:500;color:var(--gray)">Enter vessel day rates (USD/day). Saved rates are used across all tabs for cost calculation. Dimensions sourced from VesselFinder / MarineTraffic / official vessel brochures.</div>
+      <div id="loadingMsg" style="padding:14px 17px;font-size:11px;font-weight:600;color:var(--mgl)">&#8635; Loading vessel database...</div>
+      <div style="padding:4px 17px 12px;font-size:11px;font-weight:500;color:var(--gray)">Enter vessel day rates (USD/day). In Admin mode all fields are editable — including photos, specs, and notes. Dimensions sourced from VesselFinder / MarineTraffic / official vessel brochures.</div>
       <!-- Admin Panel -->
       <div style="padding:0 17px 12px">
         <button onclick="toggleAdminPanel()" style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;background:transparent;border:1px solid var(--bdr);border-radius:4px;color:var(--gray);padding:6px 14px;cursor:pointer">&#9881; Admin: Edit &amp; Save Vessel Data</button>
@@ -343,7 +343,31 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--bdr);display:
       </div>
       <div style="overflow-x:auto">
         <table class="ft">
-          <thead><tr><th>Photo</th><th>#</th><th>Owner</th><th>Vessel</th><th>LOA (m)</th><th>Beam (m)</th><th>Draft (m)</th><th>TT1 (t)</th><th>TT2 (t)</th><th>TT3 (t)</th><th>Total</th><th>Max Comb.</th><th>Tri</th><th>SLB</th><th>Day Rate (USD/day)</th></tr></thead>
+          <thead><tr>
+            <th style="min-width:70px">Photo</th>
+            <th>#</th>
+            <th style="min-width:90px">Owner</th>
+            <th style="min-width:140px">Vessel</th>
+            <th style="min-width:80px">IMO</th>
+            <th style="min-width:90px">MMSI</th>
+            <th style="min-width:50px">Built</th>
+            <th style="min-width:90px">Flag</th>
+            <th style="min-width:60px">LOA (m)</th>
+            <th style="min-width:65px">Beam (m)</th>
+            <th style="min-width:75px">Design Draft (m)</th>
+            <th style="min-width:75px">AIS Draft (m)</th>
+            <th style="min-width:70px">TT1 (t)</th>
+            <th style="min-width:70px">TT2 (t)</th>
+            <th style="min-width:70px">TT3 (t)</th>
+            <th style="min-width:65px">Total (t)</th>
+            <th style="min-width:80px">Max Comb. (t)</th>
+            <th style="min-width:55px">Trifoil</th>
+            <th style="min-width:50px">SLB</th>
+            <th style="min-width:180px">Photo URL</th>
+            <th style="min-width:100px">VF Link</th>
+            <th style="min-width:200px">Notes</th>
+            <th style="min-width:150px">Day Rate (USD/day)</th>
+          </tr></thead>
           <tbody id="fleetTb"></tbody>
         </table>
       </div>
@@ -692,30 +716,133 @@ function asmC(){
 }
 
 // ── FLEET TAB ──
+const adminOpen = () => document.getElementById("adminPanel")?.style.display !== "none";
+
 function buildFleet(){
-  document.getElementById("fleetTb").innerHTML=FLEET.map((v,i)=>{
-    const c=OC[v.owner]||{bg:"rgba(80,100,120,0.1)",c:"#506478"};
-    const tot=(v.tt1||0)+(v.tt2||0)+(v.tt3||0);
-    const th=v.img?`<img class="fth" src="${v.img}" alt="${v.vessel}" onerror="this.parentNode.innerHTML='<div class=ftph>&#128674;</div>'">`:`<div class="ftph">&#128674;</div>`;
-    return`<tr>
-      <td>${th}</td>
-      <td style="color:var(--grayl);font-weight:600;font-size:11px">${i+1}</td>
-      <td><span class="ob" style="background:${c.bg};color:${c.c}">${v.owner}</span></td>
-      <td style="font-weight:600">${v.vessel}</td>
-      <td style="font-weight:600;color:var(--mg)">${v.loa||"—"}</td>
-      <td style="color:var(--gray)">${v.beam||"—"}</td>
-      <td style="color:var(--gray)">${v.draft||"—"}</td>
-      <td style="font-weight:600;color:var(--mg)">${v.tt1?.toLocaleString()??"—"}</td>
-      <td style="color:var(--gray)">${v.tt2?.toLocaleString()??"—"}</td>
-      <td style="color:var(--grayl)">${v.tt3?.toLocaleString()??"—"}</td>
-      <td style="font-weight:700;color:var(--mg)">${tot.toLocaleString()}</td>
-      <td style="color:var(--g2);font-weight:600">${v.maxComb?v.maxComb.toLocaleString():"—"}</td>
-      <td><span class="tag ${v.tri?"ty":"tn"}">${v.tri?"Yes":"No"}</span></td>
-      <td><span class="tag ${v.slb?"ty":"tn"}">${v.slb?"Yes":"No"}</span></td>
-      <td><input class="dri" type="number" id="dr${i}" placeholder="e.g. 150000" min="0" value="${dayRates[v.vessel]||""}"></td>
-    </tr>`;
+  const edit = adminOpen();
+  document.getElementById("fleetTb").innerHTML = FLEET.map((v, i) => {
+    const raw = RAW_VESSELS[i] || {};
+    const c = OC[v.owner] || {bg:"rgba(80,100,120,0.1)", c:"#506478"};
+    const tot = (v.tt1||0) + (v.tt2||0) + (v.tt3||0);
+
+    // Photo cell — always shows image + in edit mode adds upload button
+    const imgSrc = v.img || "";
+    const photoCellView = imgSrc
+      ? `<img class="fth" src="${imgSrc}" alt="${v.vessel}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="ftph" style="display:none">&#128674;</div>`
+      : `<div class="ftph">&#128674;</div>`;
+
+    const photoCell = edit ? `
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+        <div id="ph_preview_${i}" style="width:64px;height:44px;overflow:hidden;border-radius:4px;background:#eef4fa;display:flex;align-items:center;justify-content:center">
+          ${imgSrc ? `<img src="${imgSrc}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentNode.innerHTML='<span style=font-size:18px>&#128674;</span>'">` : `<span style="font-size:18px">&#128674;</span>`}
+        </div>
+        <label style="font-size:9px;font-weight:600;color:var(--mgl);cursor:pointer;background:rgba(29,78,137,0.07);padding:2px 6px;border-radius:3px;border:1px solid var(--bdr)" title="Upload photo">
+          &#128247; Upload
+          <input type="file" accept="image/*" style="display:none" onchange="handlePhotoUpload(event,${i})">
+        </label>
+        <input type="text" id="ed_img_${i}" placeholder="or paste URL" value="${raw.photo_url||''}"
+          style="width:64px;font-size:9px;padding:2px 4px;border:1px solid var(--bdr);border-radius:3px;background:white;color:var(--dark)"
+          oninput="updatePhotoPreview(${i},this.value)">
+      </div>` : `<td style="padding:4px 6px">${photoCellView}</td>`;
+
+    // Helper to render editable or read-only cell
+    const eNum = (id, val, placeholder="") => edit
+      ? `<input type="number" id="${id}" value="${val??''}" placeholder="${placeholder}" style="width:100%;min-width:55px;padding:4px 5px;border:1px solid var(--bdr);border-radius:3px;font-size:11px;font-family:'Montserrat',sans-serif;background:white;color:var(--dark)">`
+      : (val != null ? val : "—");
+    const eTxt = (id, val, placeholder="", width="100%") => edit
+      ? `<input type="text" id="${id}" value="${val||''}" placeholder="${placeholder}" style="width:${width};padding:4px 5px;border:1px solid var(--bdr);border-radius:3px;font-size:11px;font-family:'Montserrat',sans-serif;background:white;color:var(--dark)">`
+      : (val || "—");
+    const eChk = (id, val) => edit
+      ? `<input type="checkbox" id="${id}" ${val?"checked":""} style="width:16px;height:16px;cursor:pointer">`
+      : `<span class="tag ${val?"ty":"tn"}">${val?"Yes":"No"}</span>`;
+
+    const vfLinkCell = raw.vf_link
+      ? (edit ? eTxt(`ed_vflink_${i}`, raw.vf_link, "VF URL", "120px") : `<a href="${raw.vf_link}" target="_blank" style="color:var(--mgl);font-size:10px">&#128279; View</a>`)
+      : (edit ? eTxt(`ed_vflink_${i}`, "", "VF URL", "120px") : "—");
+
+    if (edit) {
+      return `<tr style="background:rgba(255,255,255,0.7)">
+        <td style="padding:6px">${photoCell}</td>
+        <td style="color:var(--grayl);font-weight:600;font-size:11px">${i+1}</td>
+        <td>${eTxt(`ed_owner_${i}`, raw.owner, "Owner")}</td>
+        <td style="font-weight:600">${eTxt(`ed_vessel_${i}`, raw.vessel, "Name")}</td>
+        <td>${eTxt(`ed_imo_${i}`, raw.imo, "IMO", "80px")}</td>
+        <td>${eTxt(`ed_mmsi_${i}`, raw.mmsi, "MMSI", "90px")}</td>
+        <td>${eNum(`ed_yr_${i}`, raw.year_built, "YYYY")}</td>
+        <td>${eTxt(`ed_flag_${i}`, raw.flag, "Flag")}</td>
+        <td>${eNum(`ed_loa_${i}`, raw.loa)}</td>
+        <td>${eNum(`ed_beam_${i}`, raw.beam)}</td>
+        <td>${eNum(`ed_draft_${i}`, raw.draft)}</td>
+        <td>${eNum(`ed_rdraft_${i}`, raw.reported_draft)}</td>
+        <td>${eNum(`ed_tt1_${i}`, raw.tt1)}</td>
+        <td>${eNum(`ed_tt2_${i}`, raw.tt2)}</td>
+        <td>${eNum(`ed_tt3_${i}`, raw.tt3)}</td>
+        <td style="font-weight:700;color:var(--mg)">${tot.toLocaleString()}</td>
+        <td>${eNum(`ed_maxc_${i}`, raw.max_combined)}</td>
+        <td style="text-align:center">${eChk(`ed_tri_${i}`, raw.trifoil)}</td>
+        <td style="text-align:center">${eChk(`ed_slb_${i}`, raw.slb)}</td>
+        <td>${eTxt(`ed_img_${i}`, raw.photo_url, "Photo URL", "160px")}</td>
+        <td>${vfLinkCell}</td>
+        <td><input type="text" id="ed_note_${i}" value="${(raw.notes||'').replace(/"/g,'&quot;')}" placeholder="Notes / status" style="width:180px;padding:4px 5px;border:1px solid var(--bdr);border-radius:3px;font-size:11px;font-family:'Montserrat',sans-serif;background:white;color:var(--dark)"></td>
+        <td><input class="dri" type="number" id="dr${i}" placeholder="e.g. 150000" min="0" value="${dayRates[v.vessel]||''}"></td>
+      </tr>`;
+    } else {
+      return `<tr>
+        <td style="padding:4px 6px">${photoCellView}</td>
+        <td style="color:var(--grayl);font-weight:600;font-size:11px">${i+1}</td>
+        <td><span class="ob" style="background:${c.bg};color:${c.c}">${v.owner}</span></td>
+        <td style="font-weight:600">${v.vessel}</td>
+        <td style="color:var(--gray);font-size:11px">${raw.imo||"—"}</td>
+        <td style="color:var(--gray);font-size:11px">${raw.mmsi||"—"}</td>
+        <td style="color:var(--gray)">${raw.year_built||"—"}</td>
+        <td style="color:var(--gray);font-size:11px">${raw.flag||"—"}</td>
+        <td style="font-weight:600;color:var(--mg)">${v.loa||"—"}</td>
+        <td style="color:var(--gray)">${v.beam||"—"}</td>
+        <td style="color:var(--gray)">${v.draft||"—"}</td>
+        <td style="color:var(--grayl)">${raw.reported_draft!=null?raw.reported_draft:"—"}</td>
+        <td style="font-weight:600;color:var(--mg)">${v.tt1?.toLocaleString()??"—"}</td>
+        <td style="color:var(--gray)">${v.tt2?.toLocaleString()??"—"}</td>
+        <td style="color:var(--grayl)">${v.tt3?.toLocaleString()??"—"}</td>
+        <td style="font-weight:700;color:var(--mg)">${tot.toLocaleString()}</td>
+        <td style="color:var(--g2);font-weight:600">${v.maxComb?v.maxComb.toLocaleString():"—"}</td>
+        <td style="text-align:center"><span class="tag ${v.tri?"ty":"tn"}">${v.tri?"Yes":"No"}</span></td>
+        <td style="text-align:center"><span class="tag ${v.slb?"ty":"tn"}">${v.slb?"Yes":"No"}</span></td>
+        <td style="font-size:10px;color:var(--mgl);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${raw.photo_url?`<a href="${raw.photo_url}" target="_blank" style="color:var(--mgl)">&#128247; View</a>`:"—"}</td>
+        <td style="font-size:10px">${raw.vf_link?`<a href="${raw.vf_link}" target="_blank" style="color:var(--mgl)">&#128279; VF</a>`:"—"}</td>
+        <td style="font-size:10px;color:var(--gray);max-width:200px">${raw.notes||"—"}</td>
+        <td><input class="dri" type="number" id="dr${i}" placeholder="e.g. 150000" min="0" value="${dayRates[v.vessel]||''}"></td>
+      </tr>`;
+    }
   }).join("");
 }
+
+// Handle photo upload — converts to base64 and fills photo URL input + preview
+function handlePhotoUpload(event, i) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const dataUrl = e.target.result;
+    // Update the URL input field
+    const urlInput = document.getElementById(`ed_img_${i}`);
+    if (urlInput) urlInput.value = dataUrl;
+    // Update preview
+    updatePhotoPreview(i, dataUrl);
+  };
+  reader.readAsDataURL(file);
+}
+
+// Update the inline preview when URL changes
+function updatePhotoPreview(i, url) {
+  const preview = document.getElementById(`ph_preview_${i}`);
+  if (!preview) return;
+  if (url) {
+    preview.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentNode.innerHTML='<span style=font-size:18px>&#128674;</span>'">`;
+  } else {
+    preview.innerHTML = `<span style="font-size:18px">&#128674;</span>`;
+  }
+}
+
 function saveRates(){
   FLEET.forEach((v,i)=>{const val=parseFloat(document.getElementById(`dr${i}`).value)||0;dayRates[v.vessel]=val;});
   sCalc();cCalc();
@@ -779,6 +906,12 @@ async function saveVesselData() {
     const getChk = id => { const el = document.getElementById(id); return el ? el.checked : undefined; };
     return {
       ...v,
+      owner:          getTxt(`ed_owner_${i}`)   ?? v.owner,
+      vessel:         getTxt(`ed_vessel_${i}`)  ?? v.vessel,
+      imo:            getTxt(`ed_imo_${i}`)     ?? v.imo,
+      mmsi:           getTxt(`ed_mmsi_${i}`)    ?? v.mmsi,
+      year_built:     getNum(`ed_yr_${i}`)      ?? v.year_built,
+      flag:           getTxt(`ed_flag_${i}`)    ?? v.flag,
       loa:            getNum(`ed_loa_${i}`)     ?? v.loa,
       beam:           getNum(`ed_beam_${i}`)    ?? v.beam,
       draft:          getNum(`ed_draft_${i}`)   ?? v.draft,
@@ -790,6 +923,7 @@ async function saveVesselData() {
       trifoil:        getChk(`ed_tri_${i}`)     ?? v.trifoil,
       slb:            getChk(`ed_slb_${i}`)     ?? v.slb,
       photo_url:      getTxt(`ed_img_${i}`)     ?? v.photo_url,
+      vf_link:        getTxt(`ed_vflink_${i}`)  ?? v.vf_link,
       notes:          getTxt(`ed_note_${i}`)    ?? v.notes,
     };
   });
