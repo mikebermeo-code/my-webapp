@@ -331,14 +331,12 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--bdr);display:
       <div style="padding:0 17px 12px">
         <button onclick="toggleAdminPanel()" style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;background:transparent;border:1px solid var(--bdr);border-radius:4px;color:var(--gray);padding:6px 14px;cursor:pointer">&#9881; Admin: Edit &amp; Save Vessel Data</button>
         <div id="adminPanel" style="display:none;margin-top:12px;background:rgba(29,78,137,0.04);border:1px solid var(--bdr);border-radius:6px;padding:14px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--mg);margin-bottom:10px">&#128274; GitHub Save — Vessel Database</div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--mg);margin-bottom:10px">&#9881; Edit &amp; Save Vessel Database</div>
           <div style="font-size:11px;color:var(--gray);margin-bottom:10px;line-height:1.6">
-            Edit vessel fields in the table below, then save directly to <strong>vessels.json</strong> on GitHub.<br>
-            Requires a <a href="https://github.com/settings/tokens" target="_blank" style="color:var(--mgl)">GitHub Personal Access Token</a> with <code>repo</code> scope. Token is stored in your browser session only.
+            Edit any vessel field in the table below, then click Save to update the database instantly.
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <input type="password" id="ghTokenInput" placeholder="ghp_xxxxxxxxxxxx" style="flex:1;min-width:260px;background:white;border:1px solid rgba(29,78,137,0.25);border-radius:4px;padding:7px 11px;font-family:'Montserrat',sans-serif;font-size:12px;outline:none" value="">
-            <button onclick="saveVesselData()" class="sbtn" style="margin-top:0;background:var(--g2)">&#128190; Save to GitHub</button>
+            <button onclick="saveVesselData()" class="sbtn" style="margin-top:0;background:var(--g2)">&#128190; Save Changes to Database</button>
             <span id="saveStatus" style="font-size:11px;font-weight:600"></span>
           </div>
         </div>
@@ -376,10 +374,10 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--bdr);display:
 // a GitHub Personal Access Token with repo scope)
 // ═══════════════════════════════════════════════════════════════
 
-const GH_USER   = "mikebermeo-code";
-const GH_REPO   = "my-webapp";
-const GH_BRANCH = "main";
-const VESSELS_JSON_URL = `https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/${GH_BRANCH}/vessels.json?nocache=${Date.now()}`;
+// ── API ENDPOINTS ────────────────────────────────────────────────
+const API_BASE       = "https://mistraloffshore.com/clv-tool/api";
+const VESSELS_JSON_URL = `${API_BASE}/vessels.php`;
+const SAVE_VESSEL_URL  = `${API_BASE}/save_vessel.php`;
 
 function mapVessel(v) {
   return {
@@ -407,7 +405,6 @@ function mapVessel(v) {
 
 let FLEET = [];
 let RAW_VESSELS = [];
-let ghToken = "";   // set via admin panel; stored in sessionStorage only
 
 const OC={
   "NKT":       {bg:"rgba(29,78,137,0.1)",   c:"#1d4e89"},
@@ -766,108 +763,70 @@ function toggleAdminPanel() {
 }
 
 async function saveVesselData() {
-  const token = document.getElementById("ghTokenInput").value.trim() || ghToken;
-  if (!token) { alert("Please enter your GitHub Personal Access Token first."); return; }
-  ghToken = token;
-  sessionStorage.setItem("mo_gh_token", token);
-
-  // Safety check — never save if RAW_VESSELS is empty
   if (!RAW_VESSELS || RAW_VESSELS.length === 0) {
-    alert("Vessel data has not loaded yet. Please wait for the fleet table to appear before saving.");
+    alert("Vessel data has not loaded yet. Please wait for the fleet table to appear.");
     return;
   }
 
-  // Collect any edited fields from DOM inputs (only present when admin panel open)
-  // Falls back cleanly to original RAW_VESSELS value if input not found
+  const statusEl = document.getElementById("saveStatus");
+  statusEl.style.color = "var(--gray)";
+  statusEl.textContent = "Saving...";
+
+  // Collect any edited fields from DOM inputs, fall back to original values
   const updated = RAW_VESSELS.map((v, i) => {
-    const getNum = id => {
-      const el = document.getElementById(id);
-      if (!el || el.value === "") return undefined; // undefined = use original
-      const n = parseFloat(el.value);
-      return isNaN(n) ? undefined : n;
-    };
-    const getTxt = id => {
-      const el = document.getElementById(id);
-      return (el && el.value !== "") ? el.value : undefined;
-    };
-    const getChk = id => {
-      const el = document.getElementById(id);
-      return el ? el.checked : undefined;
-    };
+    const getNum = id => { const el = document.getElementById(id); if (!el || el.value === "") return undefined; const n = parseFloat(el.value); return isNaN(n) ? undefined : n; };
+    const getTxt = id => { const el = document.getElementById(id); return (el && el.value !== "") ? el.value : undefined; };
+    const getChk = id => { const el = document.getElementById(id); return el ? el.checked : undefined; };
     return {
       ...v,
-      loa:            getNum(`ed_loa_${i}`)    ?? v.loa,
-      beam:           getNum(`ed_beam_${i}`)   ?? v.beam,
-      draft:          getNum(`ed_draft_${i}`)  ?? v.draft,
-      reported_draft: getNum(`ed_rdraft_${i}`) ?? v.reported_draft,
-      tt1:            getNum(`ed_tt1_${i}`)    ?? v.tt1,
-      tt2:            getNum(`ed_tt2_${i}`)    ?? v.tt2,
-      tt3:            getNum(`ed_tt3_${i}`)    ?? v.tt3,
-      max_combined:   getNum(`ed_maxc_${i}`)   ?? v.max_combined,
-      trifoil:        getChk(`ed_tri_${i}`)    ?? v.trifoil,
-      slb:            getChk(`ed_slb_${i}`)    ?? v.slb,
-      photo_url:      getTxt(`ed_img_${i}`)    ?? v.photo_url,
-      notes:          getTxt(`ed_note_${i}`)   ?? v.notes,
+      loa:            getNum(`ed_loa_${i}`)     ?? v.loa,
+      beam:           getNum(`ed_beam_${i}`)    ?? v.beam,
+      draft:          getNum(`ed_draft_${i}`)   ?? v.draft,
+      reported_draft: getNum(`ed_rdraft_${i}`)  ?? v.reported_draft,
+      tt1:            getNum(`ed_tt1_${i}`)     ?? v.tt1,
+      tt2:            getNum(`ed_tt2_${i}`)     ?? v.tt2,
+      tt3:            getNum(`ed_tt3_${i}`)     ?? v.tt3,
+      max_combined:   getNum(`ed_maxc_${i}`)    ?? v.max_combined,
+      trifoil:        getChk(`ed_tri_${i}`)     ?? v.trifoil,
+      slb:            getChk(`ed_slb_${i}`)     ?? v.slb,
+      photo_url:      getTxt(`ed_img_${i}`)     ?? v.photo_url,
+      notes:          getTxt(`ed_note_${i}`)    ?? v.notes,
     };
   });
 
-  // Build updated JSON payload
-  const newData = {
-    _meta: {
-      version: "1.0",
-      last_updated: new Date().toISOString().slice(0,10),
-      description: "Mistral Offshore — CLV Fleet Database",
-      source: "VesselFinder / MarineTraffic / official vessel brochures"
-    },
-    vessels: updated
-  };
-  const content = btoa(unescape(encodeURIComponent(JSON.stringify(newData, null, 2))));
+  // Save each vessel via PHP API
+  let errors = 0;
+  for (const vessel of updated) {
+    try {
+      const res = await fetch(SAVE_VESSEL_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vessel)
+      });
+      const result = await res.json();
+      if (!result.success) errors++;
+    } catch(e) { errors++; }
+  }
 
-  // Get current file SHA (required by GitHub API to update)
-  const statusEl = document.getElementById("saveStatus");
-  statusEl.textContent = "Saving...";
-  try {
-    const shaRes = await fetch(`https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/vessels.json`, {
-      headers: { Authorization: "token " + token, Accept: "application/vnd.github.v3+json" }
-    });
-    const shaData = await shaRes.json();
-    const sha = shaData.sha;
-
-    // Push update
-    const pushRes = await fetch(`https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/vessels.json`, {
-      method: "PUT",
-      headers: { Authorization: "token " + token, Accept: "application/vnd.github.v3+json", "Content-Type": "application/json" },
-      body: JSON.stringify({ message: "Update vessel database via CLV estimator admin", content, sha, branch: GH_BRANCH })
-    });
-    if (pushRes.ok) {
-      RAW_VESSELS = updated;
-      FLEET = RAW_VESSELS.map(mapVessel);
-      statusEl.style.color = "var(--g2)";
-      statusEl.textContent = "✓ Saved to GitHub! Changes live in ~30s.";
-      setTimeout(()=> statusEl.textContent = "", 5000);
-    } else {
-      const err = await pushRes.json();
-      statusEl.style.color = "#902020";
-      statusEl.textContent = "Error: " + (err.message || pushRes.status);
-    }
-  } catch(e) {
+  if (errors === 0) {
+    RAW_VESSELS = updated;
+    FLEET = RAW_VESSELS.map(mapVessel);
+    statusEl.style.color = "var(--g2)";
+    statusEl.textContent = `✓ All ${updated.length} vessels saved!`;
+    setTimeout(() => statusEl.textContent = "", 4000);
+  } else {
     statusEl.style.color = "#902020";
-    statusEl.textContent = "Error: " + e.message;
+    statusEl.textContent = `⚠ ${errors} vessel(s) failed to save. Check API connection.`;
   }
 }
 
 // Persist day rates to sessionStorage so they survive tab switches
-const _origSaveRates = saveRates;
 function saveRates() {
   FLEET.forEach((v,i)=>{ const val=parseFloat(document.getElementById(`dr${i}`)?.value)||0; dayRates[v.vessel]=val; });
   sessionStorage.setItem("mo_dayrates", JSON.stringify(dayRates));
   sCalc(); cCalc();
   const n=document.getElementById("sNote"); n.classList.add("show"); setTimeout(()=>n.classList.remove("show"),2500);
 }
-
-// Restore saved token from session
-const _savedToken = sessionStorage.getItem("mo_gh_token");
-if(_savedToken) ghToken = _savedToken;
 
 // Boot
 loadVessels();
